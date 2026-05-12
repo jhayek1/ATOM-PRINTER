@@ -11,9 +11,6 @@ void ATOM_PRINTER::begin(HardwareSerial *serial, int baud, uint8_t RX, uint8_t T
 void ATOM_PRINTER::init()
 {
     _serial->write(INIT_PRINTER_CMD, sizeof(INIT_PRINTER_CMD));
-    // ESC t 0 — select CP437 (PC USA) code table so Latin symbols render correctly
-    uint8_t set_codepage[] = {0x1B, 0x74, 0x00};
-    _serial->write(set_codepage, sizeof(set_codepage));
 }
 
 void ATOM_PRINTER::WriteCMD(uint8_t *buff, uint8_t buff_size)
