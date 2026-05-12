@@ -3,6 +3,7 @@
 #include "ATOM_PRINTER_CONFIG.h"
 #include "ATOM_PRINTER_WIFI.h"
 #include "ATOM_PRINTER_HTML.h"
+#include "ATOM_IMAGE_HTML.h"
 #include "ATOM_PRINTER_MQTT.h"
 #include <Preferences.h>
 #include <ArduinoJson.h>
@@ -65,6 +66,11 @@ String urlDecode(String input)
 void handleRoot()
 {
     webServer.send(200, "text/html", (char*)printer_html);
+}
+
+void handleImageRoot()
+{
+    webServer.send(200, "text/html", (char*)image_html);
 }
 
 void handleWiFiConfig()
@@ -341,6 +347,7 @@ void webServerInit()
     // 设置路由处理器
     webServer.onNotFound(handleRoot);
     webServer.on("/", HTTP_GET, handleRoot);
+    webServer.on("/image", HTTP_GET, handleImageRoot);
     webServer.on("/print", HTTP_GET, handlePrint);
     webServer.on("/wifi_config", HTTP_POST, handleWiFiConfig);
     webServer.on("/mqtt_config", HTTP_GET, handleMQTTConfig);

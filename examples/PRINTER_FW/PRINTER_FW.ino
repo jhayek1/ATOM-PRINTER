@@ -111,7 +111,20 @@ void TaskLED(void *pvParameters)
 
 void mqttCallback(char *topic, byte *payload, unsigned int len)
 {
-    // mqtt回调函数：将从订阅主题获得的信息通过串口打印
+    Serial.println(mqtt_topic + ":");
+    Serial.printf("len:%d\r\n", len);
+
+    // ESC/POS raster image: GS v 0 = 0x1D 0x76 0x30
+    // Sent by the Telegram bot's image handler as a raw binary payload.
+    if (len >= 8 && payload[0] == 0x1D && payload[1] == 0x76 && payload[2] == 0x30) {
+        Serial.println("Printing ESC/POS image...");
+        printer.init();
+        printer.printRaw(payload, len);
+        printer.newLine(3);
+        return;
+    }
+
+    // Text commands — safe to copy onto the stack since these are short strings
     char PayloadData[len + 1];
     String Type = "";
     int posx;
@@ -119,8 +132,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
     uint8_t fonts;
     strncpy(PayloadData, (char *)payload, len);
     PayloadData[len] = '\0';
-    Serial.println(mqtt_topic + ":");
-    Serial.printf("leng:%d\r\n", len);
     Serial.println(String(PayloadData));
     Type = String(PayloadData);
     if (Type.indexOf("TEXT") >= 0) {
@@ -172,7 +183,7 @@ void setup()
     ssid_html = wifiScan();
     webServerInit();
     device_mac = WiFi.softAPmacAddress();
-    mqttClient.setBufferSize(4096);
+    mqttClient.setBufferSize(30720);  // 30 KB — fits a full-height 384 px-wide ESC/POS image
     mqttClient.setCallback(mqttCallback);
     mqttClient.setKeepAlive(10);
 

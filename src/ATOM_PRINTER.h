@@ -43,7 +43,8 @@ class ATOM_PRINTER {
     void setQRCodeECL(QRCode_EC_Level_t level);
     void printQRCode(String qrcode);
     void printASCII(String data);
-    void printBMP(uint8_t mode, uint16_t xdot, uint16_t ydot, uint8_t *buffer);
+    void printBMP(uint8_t mode, uint16_t xdot, uint16_t ydot, uint8_t *bmpdata);
+    void printRaw(const uint8_t *data, size_t size);
 };
 
 #endif

@@ -112,21 +112,22 @@ void ATOM_PRINTER::printBarCode(BarCode_t type, String barcode)
     enableBarCode(0);
 }
 
-void ATOM_PRINTER::printBMP(uint8_t mode, uint16_t xdot, uint16_t ydot, uint8_t *buffer)
+void ATOM_PRINTER::printBMP(uint8_t mode, uint16_t xdot, uint16_t ydot, uint8_t *bmpdata)
 {
-    uint16_t len;
     if (mode > 3) mode = 3;
+    cleanBuffer();  // use the internal 256-byte buffer for the command header only
     memcpy(buffer, PRINTER_BMP_CMD, sizeof(PRINTER_BMP_CMD));
-    xdot      = xdot / 8;
+    uint16_t bytes_per_row = xdot / 8;
     buffer[3] = mode;
-    buffer[4] = (uint8_t)(xdot & 0x00ff);
-    buffer[5] = (uint8_t)((xdot >> 8) & 0x00ff);
+    buffer[4] = (uint8_t)(bytes_per_row & 0x00ff);
+    buffer[5] = (uint8_t)((bytes_per_row >> 8) & 0x00ff);
     buffer[6] = (uint8_t)(ydot & 0x00ff);
     buffer[7] = (uint8_t)((ydot >> 8) & 0x00ff);
     _serial->write(buffer, sizeof(PRINTER_BMP_CMD));
-    len = xdot * ydot;
-    while (len) {
-        _serial->write(*buffer++);
-        len--;
-    }
+    _serial->write(bmpdata, (size_t)bytes_per_row * ydot);
+}
+
+void ATOM_PRINTER::printRaw(const uint8_t *data, size_t size)
+{
+    _serial->write(data, size);
 }
