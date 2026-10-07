@@ -3,11 +3,15 @@
 
 #include "ATOM_PRINTER.h"
 #include <PubSubClient.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include "ATOM_PRINTER_CONFIG.h"
 #include <Preferences.h>
 
 extern ATOM_PRINTER printer;
 extern PubSubClient mqttClient;
+extern WiFiClient plainClient;
+extern WiFiClientSecure secureClient;
 extern Preferences preferences;
 extern String device_mac;
 

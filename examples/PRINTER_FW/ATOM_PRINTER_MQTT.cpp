@@ -9,6 +9,12 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
     bool is_conneced    = false;
 
     mqttClient.disconnect();
+    // Port 8883 is MQTT over TLS
+    if (_mqtt_port == MQTT_TLS_PORT) {
+        mqttClient.setClient(secureClient);
+    } else {
+        mqttClient.setClient(plainClient);
+    }
     mqttClient.setServer(_mqtt_broker.c_str(), _mqtt_port);
     Serial.println("Connecting...");
     String mqttid;
@@ -16,7 +22,7 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
     if (_mqtt_broker.indexOf("m5stack") != -1) {
         mqttid = ("MQTTID_" + String(random(65536)));
     } else {
-        if (mqttid == "") {
+        if (_mqtt_id == "") {
             mqttid = ("MQTTID_" + String(random(65536)));
         } else {
             mqttid = _mqtt_id;
@@ -34,7 +40,8 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
         _mqtt_password = ("_mqtt_password" + String(random(65536)));
     }
 
-    while (millis() - start < _timeout) {
+    // At least one attempt, even with a timeout of 0
+    do {
         if (mqttClient.connect(mqttid.c_str(), _mqtt_user.c_str(), _mqtt_password.c_str())) {
             Serial.println("MQTT Connected!");
             is_conneced = true;
@@ -52,9 +59,9 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
             break;
         } else {
             Serial.print(".");
-            vTaskDelay(500);
+            if (millis() - start + 500 < _timeout) vTaskDelay(500);
         }
-    }
+    } while (millis() - start < _timeout);
 
     if (is_conneced) {
         // Only write settings that changed, to avoid flash wear on every reconnect

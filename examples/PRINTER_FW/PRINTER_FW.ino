@@ -31,6 +31,7 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
 xSemaphoreHandle xMQTTMutex = xSemaphoreCreateMutex();
@@ -68,8 +69,9 @@ String mqtt_topic    = MQTT_TOPIC;
 
 bool mqtt_connect_change_event = false;
 
-WiFiClient client;
-PubSubClient mqttClient(client);
+WiFiClient plainClient;
+WiFiClientSecure secureClient;  // used when the broker port is 8883
+PubSubClient mqttClient(plainClient);
 
 Atom_Printer_State_t device_state = kInit;
 
@@ -133,36 +135,42 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
         return;
     }
 
-    // Text commands — safe to copy onto the stack since these are short strings
-    char PayloadData[len + 1];
-    String Type = "";
-    int posx;
-    uint8_t indexs;
-    uint8_t fonts;
-    strncpy(PayloadData, (char *)payload, len);
-    PayloadData[len] = '\0';
-    Serial.println(String(PayloadData));
-    Type = String(PayloadData);
-    if (Type.indexOf("TEXT") >= 0) {
-        Type   = Type.substring(5);
-        posx   = Type.toInt();
-        indexs = Type.indexOf(",");
-        Type   = Type.substring(indexs + 1);
-        fonts  = Type.toInt();
-        indexs = Type.indexOf(":");
+    // Text commands. Copied to a heap String: payloads can be up to the
+    // 30 KB MQTT buffer, far more than the loop task's 8 KB stack.
+    if (len > MAX_TEXT_PAYLOAD) {
+        Serial.println("Text payload too large, ignored");
+        return;
+    }
+    String Type;
+    Type.reserve(len);
+    for (unsigned int i = 0; i < len && payload[i] != '\0'; i++) {
+        Type += (char)payload[i];
+    }
+    Serial.println(Type);
+
+    if (Type.startsWith("TEXT,")) {
+        // TEXT,<posx>,<font>:<text>
+        int comma = Type.indexOf(',', 5);
+        int colon = Type.indexOf(':', 5);
+        if (comma < 0 || colon < 0 || comma > colon) {
+            Serial.println("Malformed TEXT command, ignored");
+            return;
+        }
+        int posx  = Type.substring(5, comma).toInt();
+        int fonts = Type.substring(comma + 1, colon).toInt();
         printer.init();
         printer.printPos(posx);
         printer.fontSize(fonts);
-        printer.printASCII(&Type[indexs + 1]);
+        printer.printASCII(Type.substring(colon + 1));
         printer.newLine(3);
-    } else if (Type.indexOf("QR:") >= 0) {
+    } else if (Type.startsWith("QR:")) {
         printer.init();
-        printer.printQRCode(&Type[3]);
+        printer.printQRCode(Type.substring(3));
         printer.newLine(3);
-    } else if (Type.indexOf("BAR:") >= 0) {
+    } else if (Type.startsWith("BAR:")) {
         printer.init();
         printer.setBarCodeHRI(HIDE);
-        printer.printBarCode(CODE128, &Type[4]);
+        printer.printBarCode(CODE128, Type.substring(4));
         printer.newLine(3);
     }
 }
@@ -197,35 +205,65 @@ void setup()
     // Printing a full 30 KB image at 9600 baud blocks mqttClient.loop() for ~30 s;
     // a short keepalive makes the broker drop the connection mid-print.
     mqttClient.setKeepAlive(60);
+    // Bound how long a connect attempt to an unreachable broker can block loop()
+    mqttClient.setSocketTimeout(5);
+#ifdef MQTT_ROOT_CA
+    secureClient.setCACert(MQTT_ROOT_CA);
+#else
+    secureClient.setInsecure();  // encrypted, but the broker's certificate isn't verified
+#endif
 
     if (preferences.getString("WIFI_SSID").length() > 1) {
-        Serial.println(wifi_ssid);
         wifi_ssid     = preferences.getString("WIFI_SSID");
         wifi_password = preferences.getString("WIFI_PWD");
-        Serial.println(wifi_ssid);
-        Serial.println(wifi_password);
-        Serial.println("Get WIFI INFO From Preference");
+        Serial.println("Get WIFI INFO From Preference: " + wifi_ssid);
     }
     Serial.println(mqtt_broker);
 }
 
+// Never block here for long: the web server, DNS and button are serviced
+// from this loop too.
 void loop()
 {
+    static unsigned long last_wifi_attempt = 0;
+    static bool wifi_attempted             = false;
+    static unsigned long last_mqtt_attempt = 0;
+    static unsigned long wifi_up_since     = 0;
+    static bool ap_on                      = true;
+
     webServer.handleClient();
-    dnsServer.processNextRequest();
+    if (ap_on) dnsServer.processNextRequest();
+
     if (WiFi.status() == WL_CONNECTED) {
+        if (wifi_up_since == 0) {
+            wifi_up_since = millis();
+            if (device_state == kInit || device_state == kWiFiDisconnected) device_state = kWiFiConnected;
+        }
+        if (ap_on && millis() - wifi_up_since > AP_OFF_AFTER_MS) {
+            Serial.println("WiFi connected, turning setup access point off");
+            dnsServer.stop();
+            WiFi.softAPdisconnect(true);
+            ap_on = false;
+        }
+
         if (!mqttClient.connected()) {
-            Serial.println("reconnect mqtt...");
-            // xSemaphoreTake(xMQTTMutex, portMAX_DELAY);
-            mqttConnect(mqtt_broker, mqtt_port, mqtt_id, mqtt_user, mqtt_password, 2000);
-            // mqtt_connect_change_event = false;
-            // xSemaphoreGive(xMQTTMutex);
+            if (millis() - last_mqtt_attempt > 5000) {
+                last_mqtt_attempt = millis();
+                Serial.println("reconnect mqtt...");
+                mqttConnect(mqtt_broker, mqtt_port, mqtt_id, mqtt_user, mqtt_password, 0);
+            }
         } else {
             mqttClient.loop();
         }
     } else {
-        if (wifi_ssid != "") {
-            wifiConnect(wifi_ssid, wifi_password, 5000);
+        wifi_up_since = 0;
+        // Start a connection attempt and check on it in later loops instead of waiting
+        if (wifi_ssid != "" && (!wifi_attempted || millis() - last_wifi_attempt > 15000)) {
+            wifi_attempted    = true;
+            last_wifi_attempt = millis();
+            Serial.println("connecting to WiFi " + wifi_ssid);
+            WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
+            device_state = kWiFiDisconnected;
         }
     }
     if (M5.Btn.pressedFor(5000)) {
