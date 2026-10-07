@@ -39,11 +39,12 @@ Binary payloads are passed to the printer as ESC/POS bytes:
 - starting with `GS v 0` (`1D 76 30`): a raster image, printed as-is
 - `RAW:` followed by any ESC/POS bytes: written to the printer untouched
 
-- 6.private broker (recommended)
+- 6.private broker (optional, recommended)
 
 By default the printer uses the public `mqtt.m5stack.com` broker, where anyone
 can read and send messages on any topic. To use your own broker with a login
-and TLS, copy `examples/PRINTER_FW/ATOM_PRINTER_SECRETS.h.example` to
+and TLS (e.g. a free [EMQX Serverless](https://www.emqx.com/en/cloud/serverless-mqtt)
+deployment), copy `examples/PRINTER_FW/ATOM_PRINTER_SECRETS.h.example` to
 `ATOM_PRINTER_SECRETS.h` (ignored by git), fill it in and flash. Port 8883
 switches to TLS.
 
