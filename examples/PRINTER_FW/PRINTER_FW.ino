@@ -118,9 +118,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
     // Sent by the Telegram bot's image handler as a raw binary payload.
     if (len >= 8 && payload[0] == 0x1D && payload[1] == 0x76 && payload[2] == 0x30) {
         Serial.println("Printing ESC/POS image...");
+        // Tall images arrive as several strips; the bot appends the paper
+        // feed to the last one, so don't feed here or the strips get gaps.
         printer.init();
         printer.printRaw(payload, len);
-        printer.newLine(3);
         return;
     }
 
@@ -185,7 +186,9 @@ void setup()
     device_mac = WiFi.softAPmacAddress();
     mqttClient.setBufferSize(30720);  // 30 KB — fits a full-height 384 px-wide ESC/POS image
     mqttClient.setCallback(mqttCallback);
-    mqttClient.setKeepAlive(10);
+    // Printing a full 30 KB image at 9600 baud blocks mqttClient.loop() for ~30 s;
+    // a short keepalive makes the broker drop the connection mid-print.
+    mqttClient.setKeepAlive(60);
 
     if (preferences.getString("WIFI_SSID").length() > 1) {
         Serial.println(wifi_ssid);
