@@ -125,6 +125,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
         return;
     }
 
+    // "RAW:" + ESC/POS bytes: written to the printer untouched. The bot uses
+    // this to mix text and drawn graphics (e.g. a heart divider) in one print.
+    if (len > 4 && memcmp(payload, "RAW:", 4) == 0) {
+        Serial.println("Printing raw ESC/POS...");
+        printer.printRaw(payload + 4, len - 4);
+        return;
+    }
+
     // Text commands — safe to copy onto the stack since these are short strings
     char PayloadData[len + 1];
     String Type = "";
