@@ -26,8 +26,6 @@ class ATOM_PRINTER {
     bool _debug;
     bool waitMsg(unsigned long timerout = 500);
     void sendCMD(uint8_t *data, size_t size);
-    void cleanBuffer();
-    uint8_t buffer[256] = {0};
 
    public:
     void begin(HardwareSerial *serial = &Serial2, int baud = 9600,

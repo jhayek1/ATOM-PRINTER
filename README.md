@@ -34,6 +34,28 @@ BAR:1234
 QR:1234
 ```
 
+Binary payloads are passed to the printer as ESC/POS bytes:
+
+- starting with `GS v 0` (`1D 76 30`): a raster image, printed as-is
+- `RAW:` followed by any ESC/POS bytes: written to the printer untouched
+
+- 6.private broker (optional, recommended)
+
+By default the printer uses the public `mqtt.m5stack.com` broker, where anyone
+can read and send messages on any topic. To use your own broker with a login
+and TLS (e.g. a free [EMQX Serverless](https://www.emqx.com/en/cloud/serverless-mqtt)
+deployment), copy `examples/PRINTER_FW/ATOM_PRINTER_SECRETS.h.example` to
+`ATOM_PRINTER_SECRETS.h` (ignored by git), fill it in and flash. Port 8883
+switches to TLS.
+
+The setup access point turns itself off 2 minutes after Wi-Fi connects. Hold the
+button for 5 seconds to reset the settings and bring it back.
+
+- 7.editing the web pages
+
+The pages are stored gzipped. After editing `index.html` or `image.html`, run
+`python3 tools/html_to_header.py` to regenerate the headers.
+
 ## Related Link
 
 [Document & AT Command](https://docs.m5stack.com/en/atom/atom_printer)

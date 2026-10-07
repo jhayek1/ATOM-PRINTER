@@ -9,6 +9,12 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
     bool is_conneced    = false;
 
     mqttClient.disconnect();
+    // Port 8883 is MQTT over TLS
+    if (_mqtt_port == MQTT_TLS_PORT) {
+        mqttClient.setClient(secureClient);
+    } else {
+        mqttClient.setClient(plainClient);
+    }
     mqttClient.setServer(_mqtt_broker.c_str(), _mqtt_port);
     Serial.println("Connecting...");
     String mqttid;
@@ -16,7 +22,7 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
     if (_mqtt_broker.indexOf("m5stack") != -1) {
         mqttid = ("MQTTID_" + String(random(65536)));
     } else {
-        if (mqttid == "") {
+        if (_mqtt_id == "") {
             mqttid = ("MQTTID_" + String(random(65536)));
         } else {
             mqttid = _mqtt_id;
@@ -34,30 +40,37 @@ bool mqttConnect(String _mqtt_broker, int _mqtt_port, String _mqtt_id, String _m
         _mqtt_password = ("_mqtt_password" + String(random(65536)));
     }
 
-    while (millis() - start < _timeout) {
+    // At least one attempt, even with a timeout of 0
+    do {
         if (mqttClient.connect(mqttid.c_str(), _mqtt_user.c_str(), _mqtt_password.c_str())) {
             Serial.println("MQTT Connected!");
             is_conneced = true;
             Serial.println(F(" success"));
-            printer.printASCII(F("successfully connect to UIFLOW"));
-            printer.newLine(3);
-            printer.printASCII("subscribe: " + mqtt_topic);
+            // Only print the banner on the first connect after boot, not on every reconnect
+            static bool announced = false;
+            if (!announced) {
+                printer.printASCII(F("successfully connect to UIFLOW"));
+                printer.newLine(3);
+                printer.printASCII("subscribe: " + mqtt_topic);
+                announced = true;
+            }
             Serial.println("subscribe: " + mqtt_topic);
             mqttClient.subscribe(mqtt_topic.c_str());
             break;
         } else {
             Serial.print(".");
-            vTaskDelay(500);
+            if (millis() - start + 500 < _timeout) vTaskDelay(500);
         }
-    }
+    } while (millis() - start < _timeout);
 
     if (is_conneced) {
-        preferences.putString("MQTT_BROKER", _mqtt_broker);
-        preferences.putInt("MQTT_PORT", _mqtt_port);
-        preferences.putString("MQTT_ID", _mqtt_id);
-        preferences.putString("MQTT_USER", _mqtt_user);
-        preferences.putString("MQTT_PASSPWD", _mqtt_password);
-        preferences.putString("MQTT_TOPIC", mqtt_topic);
+        // Only write settings that changed, to avoid flash wear on every reconnect
+        if (preferences.getString("MQTT_BROKER") != _mqtt_broker) preferences.putString("MQTT_BROKER", _mqtt_broker);
+        if (preferences.getInt("MQTT_PORT") != _mqtt_port) preferences.putInt("MQTT_PORT", _mqtt_port);
+        if (preferences.getString("MQTT_ID") != _mqtt_id) preferences.putString("MQTT_ID", _mqtt_id);
+        if (preferences.getString("MQTT_USER") != _mqtt_user) preferences.putString("MQTT_USER", _mqtt_user);
+        if (preferences.getString("MQTT_PASSPWD") != _mqtt_password) preferences.putString("MQTT_PASSPWD", _mqtt_password);
+        if (preferences.getString("MQTT_TOPIC") != mqtt_topic) preferences.putString("MQTT_TOPIC", mqtt_topic);
         mqtt_broker   = _mqtt_broker;
         mqtt_port     = _mqtt_port;
         mqtt_id       = _mqtt_id;

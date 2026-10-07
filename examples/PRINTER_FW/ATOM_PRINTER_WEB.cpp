@@ -27,50 +27,21 @@ extern xSemaphoreHandle xMQTTMutex;
 // 保存网页获取的数据
 String Pdata, newLine, QRCode, AdjustLevel, printType, BarCode, BarType, Position;
 
-String urlDecode(String input)
+// Pages are stored gzipped (see tools/html_to_header.py); every browser accepts that
+static void sendGzippedHtml(const uint8_t *page, size_t size)
 {
-    String s = input;
-    s.replace("%20", " ");
-    s.replace("+", " ");
-    s.replace("%21", "!");
-    s.replace("%22", "\"");
-    s.replace("%23", "#");
-    s.replace("%24", "$");
-    s.replace("%25", "%");
-    s.replace("%26", "&");
-    s.replace("%27", "\'");
-    s.replace("%28", "(");
-    s.replace("%29", ")");
-    s.replace("%30", "*");
-    s.replace("%31", "+");
-    s.replace("%2C", ",");
-    s.replace("%2E", ".");
-    s.replace("%2F", "/");
-    s.replace("%2C", ",");
-    s.replace("%3A", ":");
-    s.replace("%3A", ";");
-    s.replace("%3C", "<");
-    s.replace("%3D", "=");
-    s.replace("%3E", ">");
-    s.replace("%3F", "?");
-    s.replace("%40", "@");
-    s.replace("%5B", "[");
-    s.replace("%5C", "\\");
-    s.replace("%5D", "]");
-    s.replace("%5E", "^");
-    s.replace("%5F", "-");
-    s.replace("%60", "`");
-    return s;
+    webServer.sendHeader("Content-Encoding", "gzip");
+    webServer.send_P(200, "text/html", (PGM_P)page, size);
 }
 
 void handleRoot()
 {
-    webServer.send(200, "text/html", (char*)printer_html);
+    sendGzippedHtml(printer_html, sizeof(printer_html));
 }
 
 void handleImageRoot()
 {
-    webServer.send(200, "text/html", (char*)image_html);
+    sendGzippedHtml(image_html, sizeof(image_html));
 }
 
 void handleWiFiConfig()
@@ -100,8 +71,6 @@ void handleWiFiConfig()
     Serial.println("Received WiFi config:");
     Serial.print("SSID: ");
     Serial.println(ssid);
-    Serial.print("Password: ");
-    Serial.println(password);
 
     // 验证SSID
     if (ssid.length() == 0) {
@@ -289,15 +258,15 @@ void handlePrint()
 {
     Serial.println("Handling print request");
 
-    // 获取打印类型
-    printType = urlDecode(webServer.arg("printType"));
+    // 获取打印类型 (WebServer::arg() already URL-decodes)
+    printType = webServer.arg("printType");
     Serial.print("Print type: ");
     Serial.println(printType);
 
     // 根据打印类型处理不同的数据
     if (printType == "ASCII") {
-        Pdata   = urlDecode(webServer.arg("Pdata"));
-        newLine = urlDecode(webServer.arg("newLine"));
+        Pdata   = webServer.arg("Pdata");
+        newLine = webServer.arg("newLine");
 
         Serial.print("ASCII data: ");
         Serial.println(Pdata);
@@ -307,8 +276,8 @@ void handlePrint()
         printer.init();
         printer.printASCII(Pdata);
     } else if (printType == "QRCode") {
-        QRCode  = urlDecode(webServer.arg("QRCode"));
-        newLine = urlDecode(webServer.arg("newLine"));
+        QRCode  = webServer.arg("QRCode");
+        newLine = webServer.arg("newLine");
 
         Serial.print("QRCode data: ");
         Serial.println(QRCode);
@@ -316,8 +285,8 @@ void handlePrint()
         printer.init();
         printer.printQRCode(QRCode);
     } else if (printType == "BarCode") {
-        BarCode = urlDecode(webServer.arg("BarCode"));
-        newLine = urlDecode(webServer.arg("newLine"));
+        BarCode = webServer.arg("BarCode");
+        newLine = webServer.arg("newLine");
 
         Serial.print("Barcode data: ");
         Serial.println(BarCode);

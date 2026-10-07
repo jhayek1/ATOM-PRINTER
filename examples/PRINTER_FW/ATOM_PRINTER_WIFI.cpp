@@ -8,6 +8,7 @@ String wifiScan()
 
     // 执行 WiFi 扫描
     int n = WiFi.scanNetworks();
+    if (n < 0) n = 0;  // negative values are scan errors; don't size an array with them
 
     // 使用动态数组存储已看到的 SSID
     String seenSSIDs[n];
